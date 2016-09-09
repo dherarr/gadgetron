@@ -77,6 +77,7 @@ protected:
 };
 
 typedef Types<float> realImplementations;
+typedef std::complex<float> TypeParam;
 TYPED_TEST_CASE(curveFitting_test, realImplementations);
 
 
@@ -667,14 +668,15 @@ namespace Gadgetron {
     using namespace Gadgetron;
     using testing::Types;
 
+
     // first, define solver to have signal model and cost function as template type
-    Gadgetron::simplexLagariaSolver< std::vector<float>, Gadgetron::fatWaterOperator< std::vector<float> >, Gadgetron::leastSquareErrorCostFunction< std::vector<float> > > solver;
+    Gadgetron::simplexLagariaSolver< std::vector<TypeParam>, Gadgetron::fatWaterOperator< std::vector<TypeParam> >, Gadgetron::leastSquareErrorCostFunction< std::vector<TypeParam> > > solver;
  
     // define signal model
-    Gadgetron::fatWaterOperator< std::vector<float> > t2;
+    Gadgetron::fatWaterOperator< std::vector<TypeParam> > fw;
  
     // define cost function
-    Gadgetron::leastSquareErrorCostFunction< std::vector<float> > lse;
+    Gadgetron::leastSquareErrorCostFunction< std::vector<TypeParam> > lse;
  
     // then, set measured points. In this case, it is the echo time (TE) in ms and measured intensity values for T2 decay
     solver.x_.resize(8); // echo time, in ms
@@ -703,7 +705,7 @@ namespace Gadgetron {
     bi[1] = 600; // <-- a guess of T2
  
     // let solver know the signal model and cost function
-    solver.signal_model_ = &t2;
+    solver.signal_model_ = &fw;
     solver.cf_ = &lse;
  
     // solve the optimization problem and the optimal parameters are returned in array b
