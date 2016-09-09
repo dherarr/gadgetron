@@ -63,16 +63,28 @@ namespace Gadgetron {
     template <class ARRAY>
     void fatWaterOperator<ARRAY>::magnitude(const ARRAY& x, const ARRAY& b, ARRAY& y)
     {
-        size_t num = x.size();
-        if(y.size()!=x.size()) y.resize(num, 0);
+      
+      ELEMENT_TYPE Wr = b[0];
+      ELEMENT_TYPE Wi = b[1];
+      ELEMENT_TYPE Fr = b[2];
+      ELEMENT_TYPE Fi = b[3];
+      ELEMENT_TYPE fB = b[4];
 
-        int sign_b1 = boost::math::sign(b[1]);
-        ELEMENT_TYPE rb = 1.0 / ( (std::abs(b[1])<FLT_EPSILON) ? sign_b1*FLT_EPSILON : b[1] );
-
-        size_t ii;
-        for (ii=0; ii<num; ii++)
+      
+      size_t num = x.size();
+      if(y.size()!=x.size()) y.resize(num, 0);
+      
+      int sign_b1 = boost::math::sign(b[1]);
+      ELEMENT_TYPE rb = 1.0 / ( (std::abs(b[1])<FLT_EPSILON) ? sign_b1*FLT_EPSILON : b[1] );
+      
+      size_t ii;
+      for (ii=0; ii<num; ii++)
         {
-            y[ii] = b[0] * exp( -1 * x[ii] * rb);
-        }
+	  //            y[ii] = b[0] * exp( -1 * x[ii] * rb);
+	  // Need to write this code still - lots of missing stuff including reserving memory
+	  y[ii] = (Wr + Fr*cfr)*cos(2*PI*x[ii]*fB) - Fi*cfi*sin(2*PI*x[ii]*fB);
+	  y[num+ii] = (Wi - Fi*cfi)*sin(2*PI*x[ii]*fB) + Fr*cfi*cos(2*PI*x[ii]*fB);
+	  
+	}
     }
 }
