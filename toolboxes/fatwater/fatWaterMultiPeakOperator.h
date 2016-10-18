@@ -82,7 +82,7 @@ namespace Gadgetron {
 
             size_t num_fat_peaks = fat_freqs_.size();
 
-            ELEMENT_TYPE v(0, 2*M_PI*b[2].real()*xi.real());
+            ELEMENT_TYPE v = 2*M_PI*b[2]*xi; // DH* removing 'real' from b[2] and xi
             ELEMENT_TYPE exp_v = std::exp(v);
 
             // to rhoW
@@ -93,14 +93,14 @@ namespace Gadgetron {
             ELEMENT_TYPE fat_w(0);
             for (pp=0; pp<num_fat_peaks; pp++)
             {
-                ELEMENT_TYPE v(0, 2*M_PI*fat_freqs_[pp]*xi.real());
+	      ELEMENT_TYPE v = 2*M_PI*fat_freqs_[pp]*xi;
                 fat_w += fat_rel_amps_[pp]*std::exp(v);
             }
 
             grad[1] = fat_w*exp_v;
 
             // to fB
-            ELEMENT_TYPE v2(0, 2*M_PI*xi.real());
+            ELEMENT_TYPE v2 = 2*M_PI*xi;
             grad[2] = (b[0]+b[1]*fat_w) * exp_v * v2;
         }
         catch(...)
@@ -120,13 +120,13 @@ namespace Gadgetron {
         size_t ii, pp;
         for (ii=0; ii<num; ii++)
         {
-            ELEMENT_TYPE v(0, 2*M_PI*b[2].real()*x[ii].real());
+            ELEMENT_TYPE v = 2*M_PI*b[2]*x[ii];
             ELEMENT_TYPE exp_v = std::exp(v);
 
             ELEMENT_TYPE fat_w(0);
             for (pp=0; pp<num_fat_peaks; pp++)
             {
-                ELEMENT_TYPE v(0, 2*M_PI*fat_freqs_[pp]*x[ii].real());
+                ELEMENT_TYPE v = 2*M_PI*fat_freqs_[pp]*x[ii];
                 fat_w += fat_rel_amps_[pp]*std::exp(v);
             }
 

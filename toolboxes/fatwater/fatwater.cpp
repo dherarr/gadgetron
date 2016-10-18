@@ -80,7 +80,7 @@ protected:
 };
 
 typedef Types<float> realImplementations;
-typedef std::complex<float> TypeParam;
+typedef float TypeParam;
 TYPED_TEST_CASE(curveFitting_test, realImplementations);
 
 
@@ -693,7 +693,7 @@ namespace Gadgetron {
     solver.x_[7] = 160;
  
     solver.y_.resize(8); // intensity
-    std::complex<float> mysignal(600,0);
+    float mysignal = 600;
     solver.y_[0] = mysignal;
     solver.y_[1] = mysignal;
     solver.y_[2] = mysignal;
@@ -704,10 +704,10 @@ namespace Gadgetron {
     solver.y_[7] = mysignal;
  
     // set the initial guess for A and T2, A*exp(-TE/T2)
-    std::vector<float> bi(2), b(2);
-    bi[0] = 200.0; //<-- take the smallest TE intensity as an initial value
-    bi[1] = 100.0; // <-- a guess of T2
-    bi[2] = 0.0; // <-- a guess of T2
+    std::vector<float> bi(3), b(3);
+    bi[0] = mysignal; //<-- take the smallest TE intensity as an initial value
+    bi[1] = mysignal; // <-- a guess of T2
+    bi[2] = mysignal; // <-- a guess of T2
  
     // let solver know the signal model and cost function
     solver.signal_model_ = &fw;
@@ -716,7 +716,7 @@ namespace Gadgetron {
     // solve the optimization problem and the optimal parameters are returned in array b
     solver.solve(b, bi);
  
-    std::cout << "Solver Results: W = " << b[0] << ", F = " << b[1]  ", fm = " << b[2] << std::endl;
+    std::cout << "Solver Results: W = " << b[0] << ", F = " << b[1] <<  ", fm = " << b[2] << std::endl;
 
 
     std::cout << mytimer.format() << '\n';  
