@@ -55,6 +55,8 @@ Traits::edge_descriptor AddEdge(Traits::vertex_descriptor &v1,
 				Graph &g);
 */
 
+
+// DH: Function to add a single edge to the graph within the graph cut algorithm 
 void AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_descriptor &v2, property_map < Graph, edge_reverse_t >::type &rev, const double capacity, Graph &g)
 {
   Traits::edge_descriptor e1 = add_edge(v1, v2, g).first;
@@ -67,7 +69,7 @@ void AddEdge(Traits::vertex_descriptor &v1, Traits::vertex_descriptor &v2, prope
 }
 
 
-// For curve fitting stuff
+// DH: For curve fitting portion (voxel-wise fitting after the graph cut iterations)
 using namespace Gadgetron;
 using testing::Types;
 
@@ -112,6 +114,7 @@ namespace Gadgetron {
     float fieldStrength = p.fieldStrengthT_;
     std::vector<float> echoTimes = p.echoTimes_;
     bool precessionIsClockwise = p.precessionIsClockwise_;
+    // DH: We need to make sure to keep the units of the TEs consistent: currently hardcoded conversion from mseconds to seconds
     for (auto& te: echoTimes) {
       te = te*0.001; // Echo times in seconds rather than milliseconds
     }
@@ -125,6 +128,7 @@ namespace Gadgetron {
     
     // Set some initial parameters so we can get going
     // These will have to be specified in the XML file eventually
+    // DH: To-Do: Algorithm parameters are hardcoded here but need to be specified elsewhere
     std::pair<float,float> range_r2star = std::make_pair(0.0,100.0);
     uint16_t num_r2star = 11;
     std::pair<float,float> range_fm = std::make_pair(-200.0,200.0);
@@ -136,16 +140,14 @@ namespace Gadgetron {
     float lambda = 0.02;
     float lambda_extra = 0.01;
     
-    //Check that we have reasonable data for fat-water separation
-    
-    
-    //Calculate residual
-    //
+    // DH: The next block calculates residual for each possible field map estimate at each voxel
+    // DH: This is the first part of the graph cut algorithm
+
+    // DH: Define the VARPRO Phi matrix for zero field map (Phi maps water and fat amplitudes to echo signals)
     float relAmp, freq_hz;
     uint16_t npeaks;
     uint16_t nspecies = a.species_.size();
     uint16_t nte = echoTimes.size();
-    
     hoMatrix< std::complex<float> > phiMatrix(nte,nspecies);
     for( int k1=0;k1<nte;k1++) {
       for( int k2=0;k2<nspecies;k2++) {
@@ -158,9 +160,12 @@ namespace Gadgetron {
 	}
       }
     }
+
     //auto a_phiMatrix = as_arma_matrix(&phiMatrix);
     //auto mymat2 = mymat.t()*mymat;
-    
+
+
+    // DH: Prepare for the VarPro projection matrix. Create Identity matrix. 
     hoMatrix< std::complex<float> > IdentMat(nte,nte);
     for( int k1=0;k1<nte;k1++) {
       for( int k2=0;k2<nte;k2++) {
@@ -171,8 +176,10 @@ namespace Gadgetron {
 	}
       }
     }
+
     //	auto a_phiMatrix = as_arma_matrix(&IdentMat);
     
+    // DH: Calculate array of possible field map values
     float fm;
     std::vector<float> fms(num_fm);
     fms[0] = range_fm.first;
@@ -180,6 +187,7 @@ namespace Gadgetron {
       fms[k1] = range_fm.first + k1*(range_fm.second-range_fm.first)/(num_fm-1);
     }
     
+    // DH: Calculate array of possible R2* values
     float r2star;
     std::vector<float> r2stars(num_r2star);
     r2stars[0] = range_r2star.first;
@@ -188,6 +196,8 @@ namespace Gadgetron {
     }
     
     
+
+    // DH: Calculate all VarPro projection matrices (one for each fieldmap-R2* combination)
     std::complex<float> curModulation;
     hoMatrix< std::complex<float> > tempM1(nspecies,nspecies);
     hoMatrix< std::complex<float> > tempM2(nspecies,nte);
@@ -201,7 +211,7 @@ namespace Gadgetron {
       for(int k4=0;k4<num_r2star;k4++) {
 	r2star = r2stars[k4];
 	
-	
+	// DH: Generate Psi matrix including effects of fieldmap and R2* on Phi matrix
 	for( int k1=0;k1<nte;k1++) {
 	  curModulation = exp(-r2star*echoTimes[k1])*std::complex<float>(cos(2*PI*echoTimes[k1]*fm),sin(2*PI*echoTimes[k1]*fm));
 	  for( int k2=0;k2<nspecies;k2++) {
@@ -209,6 +219,7 @@ namespace Gadgetron {
 	  }
 	}
 	
+	// DH: Multiply Psi by its own hermitian transpose
 	herk( tempM1, psiMatrix, 'L', true );
 	//	    tempM1.copyLowerTriToUpper();
 	for (int ka=0;ka<tempM1.get_size(0);ka++ ) {
@@ -217,6 +228,7 @@ namespace Gadgetron {
 	  }
 	}
 	
+	// DH: Compute inverse of tempM1
 	potri(tempM1);
 	for (int ka=0;ka<tempM1.get_size(0);ka++ ) {
 	  for (int kb=ka+1;kb<tempM1.get_size(1);kb++ ) {
@@ -225,16 +237,14 @@ namespace Gadgetron {
 	}
 	
 	
-	//GDEBUG(" (%d,%d) = (%d,%d) X (%d,%d) \n", tempM2.get_size(0),tempM2.get_size(1),tempM1.get_size(0),tempM1.get_size(1),psiMatrix.get_size(1),psiMatrix.get_size(0));
+	// DH: Compute projector 
 	gemm( tempM2, tempM1, false, psiMatrix, true );
-	
-	
-	//GDEBUG(" (%d,%d) = (%d,%d) X (%d,%d) \n", P1.get_size(0),P1.get_size(1),psiMatrix.get_size(0),psiMatrix.get_size(1),tempM2.get_size(0),tempM2.get_size(1));
 	gemm( P1, psiMatrix, false, tempM2, false );
 	
+	// DH: Compute projector onto orthogonal space
 	subtract(IdentMat,P1,P);
 	
-	// Keep all projector matrices together
+	// DH: Keep all projector matrices together
 	for( int k1=0;k1<nte;k1++) {
 	  for( int k2=0;k2<nte;k2++) {
 	    Ps(k1,k2,k3,k4) = P(k1,k2);
@@ -244,8 +254,9 @@ namespace Gadgetron {
     }
     
     
-    // Need to check that S = nte
-    // N should be the number of contrasts (eg: for PSIR)
+    // DH: Next we have a big loop to calculate the residual
+    // DH: ToDo: Need to check that S = nte
+    // DH: N should be the number of contrasts (eg: for PSIR)
     hoMatrix< std::complex<float> > tempResVector(S,N);
     hoMatrix< std::complex<float> > tempSignal(S,N);
     hoNDArray<float> residual(num_fm,X,Y,Z);
@@ -261,33 +272,41 @@ namespace Gadgetron {
 	      tempSignal(ks,kn) = data(kx,ky,kz,0,kn,ks,0);
 	    }
 	  }
-	  
+
+	  // DH: Initialize residual with a large number
 	  minResidual2 = 1.0 + pow(nrm2(&tempSignal),2.0);
 	  
+	  // DH: Loop over all possible field map values
 	  for(int kfm=0;kfm<num_fm;kfm++) {
 	    
+	    // DH: Initialize residual with a large number
 	    minResidual = 1.0 + pow(nrm2(&tempSignal),2.0);
 	    
 	    for(int kr=0;kr<num_r2star;kr++) {
-	      // Get current projector matrix
+	      // DH: Get current projector matrix for current R2* and field map
 	      for( int kt1=0;kt1<nte;kt1++) {
 		for( int kt2=0;kt2<nte;kt2++) {
 		  P(kt1,kt2) = Ps(kt1,kt2,kfm,kr);
 		}
 	      }
 	      
-	      // Apply projector
+	      // DH: Apply projector to signal at current voxel
 	      gemm( tempResVector, P, false, tempSignal, false );
 	      
+	      // DH: Calculate norm squared to obtain residual measure
 	      curResidual = pow(nrm2(&tempResVector),2);
 	      
+	      // DH: Update residual for current R2* value 
 	      if (curResidual < minResidual) {
 		minResidual = curResidual;
 		r2starIndex(kfm,kx,ky,kz) = kr;
 	      }
 	    }
+
+	    // DH: Residual for current fieldmap value is the minimum over all R2* values
 	    residual(kfm,kx,ky,kz) = minResidual;
 	    
+	    // DH: Update residual if needed
 	    if (minResidual < minResidual2) {
 	      minResidual2 = minResidual;
 	      fmIndex(kx,ky,kz) = kfm;
@@ -298,6 +317,7 @@ namespace Gadgetron {
     }
 
     
+    // DH: Re-scale and normalize the residuals for all voxels
     float residual_max = Gadgetron::max(&residual);
     float BIG_NUMBER = 100000;
     for(int kfm=0;kfm<num_fm;kfm++) {
