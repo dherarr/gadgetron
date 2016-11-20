@@ -334,14 +334,12 @@ namespace Gadgetron {
 
   
  
-
-    // Initialize field map (indexed on the quantized fm values) to be in the middle of the field map range (ie: all zeroes if symmetric range)
+    // DH: Begin graph cut iterations
+    // DH: Initialize field map (indexed on the quantized fm values) to be in the middle of the field map range (ie: all zeroes if symmetric range)
     hoNDArray< uint16_t > cur_ind(X,Y,Z); // field map index
     cur_ind.fill((int)(num_fm/2));
-    // If we want to consider only one field map value, no need for any fancy stuff
-    if( num_fm>1 ) { // Otherwise, do graph cut iterations
-
-
+    // DH: If we want to consider only one field map value, no need for any fancy stuff
+    if( num_fm>1 ) { // DH: Otherwise, do graph cut iterations
       float delta_fm = fms[2]-fms[1];
       hoNDArray< float > lmap(X,Y,Z); // regularization parameter map
       int fm_min_index;
@@ -369,7 +367,7 @@ namespace Gadgetron {
 
 
       float lmap_mean = Gadgetron::mean(&lmap);
-      // Set regularization parameter map for spatially-varying regularization
+      // DH: Set regularization parameter map for spatially-varying regularization
       for( int kx=0;kx<X;kx++ ) {
 	for( int ky=0;ky<Y;ky++ ) {
 	  for( int kz=0;kz<Z;kz++ ) {
@@ -379,24 +377,10 @@ namespace Gadgetron {
       }    
 
 
-      for(int ks=0;ks<S;ks++) {
-	std::cout << "Voxel 90, 100: signal = " << data(90,100,0,0,0,ks,0) <<  std::endl;
-      }
-	
-	
-      for(int kfm=0;kfm<num_fm;kfm++) {
-	std::cout << "Voxel 90, 100: fm = " << fms[kfm] << ", residual = " << residual(kfm,90,100,0) << std::endl;
-      }
-
-
-    
-      // Form the graph
+      // DH: Declare some parameters for the graph
       uint32_t num_nodes = X*Y*Z; // One node per voxel, num_nodes excludes source and sink
       uint32_t num_edges = num_nodes*(2 + (size_clique+1)^2); // Number of edges, including data and regularization terms
 
-
-      // Add some graph stuff
-     
       using namespace boost;
  
       typedef int EdgeWeightType;
@@ -413,13 +397,13 @@ namespace Gadgetron {
 					  property < edge_residual_capacity_t, EdgeWeightType,
 						     property < edge_reverse_t, Traits::edge_descriptor > > > > Graph;
  
+
+      // DH: Here are the graph cut iterations
       int num_big_jumps = 5;
       for(int kiter=0;kiter<num_iterations;kiter++) {
 	
-	
-	// Graphcut: big jumps
-	
-	// Find the next candidate index at each voxel (ie: next local minimum)
+	// DH: Graphcut: big jumps
+	// DH: Find the next candidate index at each voxel (ie: next local minimum)
 	hoNDArray< uint16_t > next_ind(X,Y,Z); // field map index
 	float cur_sign = pow(-1,kiter);
 	uint16_t next_ind_voxel;
@@ -429,7 +413,7 @@ namespace Gadgetron {
 	    for( int kz=0;kz<Z;kz++ ) {
 	      
 	      if(kiter<num_big_jumps) {
-		// Find next local minimizer of residual at this (kx,ky,kz) pixel
+		// DH: Find next local minimizer of residual at this (kx,ky,kz) pixel
 		fm_min = residual(1,kx,ky,kz);
 		next_ind_voxel = cur_ind(kx,ky,kz) + (int)cur_sign;
 		found_local_min = false;
@@ -452,7 +436,7 @@ namespace Gadgetron {
 		
 	      } else {
 		
-		next_ind_voxel = cur_ind(kx,ky,kz) + (int)(cur_sign); // DH* Need to add bigger jumps here
+		next_ind_voxel = cur_ind(kx,ky,kz) + (int)(cur_sign); // DH: Currently jumps of size 1 - need to add bigger jumps here
 
 		if(next_ind_voxel>=num_fm) 
 		  next_ind_voxel=num_fm-1;
@@ -467,9 +451,6 @@ namespace Gadgetron {
 	  }
 	}
       
-	std::cout << "Voxel 90, 100: _____ cur ind = " << cur_ind(90,100,0) << ", fm = " << fms[cur_ind(90,100,0)] << ", next ind = " << next_ind(90,100,0)  << ", fm = " << fms[next_ind(90,100,0)] << std::endl;
-	
-	
 	Graph g; //a graph with 0 vertices
 	
 	property_map < Graph, edge_reverse_t >::type rev = get(edge_reverse, g);
