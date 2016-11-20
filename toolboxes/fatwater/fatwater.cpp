@@ -1,3 +1,11 @@
+/* 
+   File: fatwater.cpp
+   Description: Fat-water separation based on a graph cut algorithm, as described in 
+   Hernando D, Kellman P, Haldar JP, Liang Z-P. Robust Water/Fat Separation in the Presence of Large Field Inhomogeneities Using a Graph Cut Algorithm. Magnetic resonance in Medicine. 2010;63(1):79-90. doi:10.1002/mrm.22177.medicine
+   Authors: Diego Hernando, Hui Xue, Peter Kellman, Michael Hansen
+ */
+
+
 #include "fatwater.h"
 
 #include "hoMatrix.h"
@@ -451,11 +459,11 @@ namespace Gadgetron {
 	  }
 	}
       
-	Graph g; //a graph with 0 vertices
+	Graph g; // DH: create a graph with 0 vertices
 	
 	property_map < Graph, edge_reverse_t >::type rev = get(edge_reverse, g);
 	
-	//add a source and sink node, and store them in s and t, respectively
+	// DH: add a source and sink node, and store them in s and t, respectively. Also, add a node per pixel. 
 	Traits::vertex_descriptor s = add_vertex(g);
 	hoNDArray<Traits::vertex_descriptor> v(X,Y,Z);
 	for(int kx=0;kx<X;kx++) {
@@ -468,7 +476,8 @@ namespace Gadgetron {
 	Traits::vertex_descriptor t = add_vertex(g);
 	
 
-
+	// DH: Add edges to the graph (Start with residual related edges, then regularization related edges)
+	// DH: Keep track of the min and max edge values (initialized here with extreme values)
 	int min_edge = 10000;
 	int max_edge = -10000;
 
@@ -485,19 +494,20 @@ namespace Gadgetron {
 	      //AddEdge(s, v(kx,ky,kz), rev, (int)round(val_sv), g);
 	      //AddEdge(v(kx,ky,kz), t, rev, (int)round(val_vt), g);
 
-
+	      // DH: Collect current and potential next residual value 
 	      float resNext = residual(next_ind(kx,ky,kz),kx,ky,kz);
 	      float resCur = residual(cur_ind(kx,ky,kz),kx,ky,kz);
 
+	      // DH: Edge weights from source to current pixel node, and from current pixel node to sink
 	      double val_sv = (double)(std::max(float(0.0),resNext-resCur));
 	      double val_vt = (double)(std::max(float(0.0),resCur-resNext));
 
+	      // DH: Add the edges
 	      AddEdge(s, v(kx,ky,kz), rev, val_sv, g);
 	      AddEdge(v(kx,ky,kz), t, rev, val_vt, g);
-	      
-	      if(kx==90 && ky==100)
-		std::cout << " Val_sv = " << val_sv << ", val_vt = " << val_vt << std::endl;
 
+
+	      // DH: Keep track of max and min edge weights
 	      if (val_sv > max_edge)
 		max_edge = val_sv;
 	      if (val_vt > max_edge)
@@ -509,12 +519,7 @@ namespace Gadgetron {
 		min_edge = val_vt;
 	      
 
-
-
-	      //	      if(kx==90 && ky==100)
-	      //		std::cout << " Wanted.... Val_sv = " << (int)round(val_sv) << ", val_vt = " << (int)round(val_vt) << std::endl;
-
-	      
+	      // DH: Now include the regularization edges based on Hernando et al, MRM 2010
 	      for(int dx=-size_clique;dx<=size_clique;dx++) {
 		for(int dy=-size_clique;dy<=size_clique;dy++) {
 		  for(int dz=-size_clique;dz<=size_clique;dz++) {
@@ -530,9 +535,7 @@ namespace Gadgetron {
 		      c = curlmap/dist*pow(next_ind(kx,ky,kz) - cur_ind(kx+dx,ky+dy,kz+dz),2); 
 		      d = curlmap/dist*pow(next_ind(kx,ky,kz) - next_ind(kx+dx,ky+dy,kz+dz),2); 
 		      
-		      // if(kx==109 && ky==149)
-		      //   std::cout << " Val_bcad = " << (b+c-a-d) << ", a = " << a << ", b = " << b << ", c = " << c << ", d = " << d << std::endl;
-
+	
 		      AddEdge(v(kx,ky,kz), v(kx+dx,ky+dy,kz+dz), rev, (int)(b+c-a-d), g);
 		      AddEdge(s, v(kx,ky,kz), rev, (int)(std::max(float(0.0),c-a)), g);
 		      AddEdge(v(kx,ky,kz), t, rev, (int)(std::max(float(0.0),a-c)), g);
@@ -549,17 +552,12 @@ namespace Gadgetron {
 	  }
 	}
 
-
-	std::cout << " MIN EDGE = " << min_edge << ", MAX_EDGE = " << max_edge << std::endl;
-		
-		
-	//EdgeWeightType flow = edmonds_karp_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
-	//EdgeWeightType flow = push_relabel_max_flow(g, s, t); // a list of sources will be returned in s, and a list of sinks will be returned in t
+	// DH: Solve the min-cut/max-flow problem for the current graph in this iteration
 	EdgeWeightType flow = boykov_kolmogorov_max_flow(g, s,t); // a list of sources will be returned in s, and a list of sinks will be returned in t
 
 
 
-	std::cout << "Max flow is: " << flow << std::endl;
+	// std::cout << "Max flow is: " << flow << std::endl;
 
 	property_map<Graph, edge_capacity_t>::type
 	  capacity = get(edge_capacity, g);
@@ -570,49 +568,26 @@ namespace Gadgetron {
 	property_map<Graph, vertex_color_t>::type
 	  colormap = get(vertex_color, g);
 
-
-	//	std::cout << "c flow values:" << std::endl;
-	//	graph_traits<Graph>::vertex_iterator u_iter, u_end;
-	//	graph_traits<Graph>::out_edge_iterator ei, e_end;
-	//	for (tie(u_iter, u_end) = vertices(g); u_iter != u_end; ++u_iter)
-	//	  for (tie(ei, e_end) = out_edges(*u_iter, g); ei != e_end; ++ei)
-	//	    if (capacity[*ei] > 0)
-	//	      std::cout << "f " << *u_iter << " " << target(*ei, g) << " " << (capacity[*ei]) << " " << (residual_capacity[*ei]) << " " << (capacity[*ei] - residual_capacity[*ei]) << std::endl;
-				
-
-
+	// DH: Take the output of max-flow and apply the corresponding optimum jump at each pixel 
 	for( int kx=0;kx<X;kx++) {
 	  for( int ky=0;ky<Y;ky++) {
 	    for( int kz=0;kz<Z;kz++) {
-
-	      //	      if(colormap[1 + kx + ky*X + kz*X*Y] > 0)
-	      //		std::cout << " ColorMap = " << colormap[1 + kx + ky*X + kz*X*Y] << ", x = " << kx << ", y = " << ky << std::endl;
-
-	      if(kx==90 && ky==100) {
-		std::cout << " ColorMap = " << colormap[1 + ky + kx*Y + kz*X*Y] << ", Colormap0 = " << colormap[0] << ", ColormapEnd = " << colormap[X*Y*Z+1] << std::endl;
-		std::cout << " posVoxel = " << 1 + ky + kx*Y + kz*X*Y  << ", posEnd = " << X*Y*Z+1 << std::endl;
-	      }
-
-
 	      if(colormap[1 + ky + kx*Y + kz*X*Y]!=colormap[0])
 		cur_ind(kx,ky,kz) = next_ind(kx,ky,kz);
 	    }
 	  }
 	}
     
-	// Graphcut: small jumps
       }
       
       
     } // End else (all the graph cut iteration portion)
 
 
-    std::cout << " Final estimate at voxel [90,100]... fm = " << fms[cur_ind(90,100,0)] << std::endl; 
-    
-    //Do final calculations once the field map is done
+    // DH: Do final calculations once the field map is done
+    // DH: Do fat-water separation with current field map and R2* estimates
     hoMatrix< std::complex<float> > curWaterFat(2,N);
     hoMatrix< std::complex<float> > AhA(2,2);
-    // Do fat-water separation with current field map and R2* estimates
     for( int kx=0;kx<X;kx++) {
       for( int ky=0;ky<Y;ky++) {
 	for( int kz=0;kz<Z;kz++) {
@@ -622,7 +597,7 @@ namespace Gadgetron {
 	      tempSignal(ks,kn) = data(kx,ky,kz,0,kn,ks,0);
 	    }
 	  }
-	  // Get current Psi matrix
+	  // DH: Get current Psi matrix for fieldmap and R2* at current voxel
 	  fm = fms[cur_ind(kx,ky,kz)];
 	  r2star =r2stars[r2starIndex(cur_ind(kx,ky,kz),kx,ky,kz)];
 	  for( int kt=0;kt<nte;kt++) {
@@ -632,10 +607,10 @@ namespace Gadgetron {
 	    }
 	  }
 	  
-	  // Solve for water and fat
+	  // DH: Solve LS problem for water and fat
 	  gemm( curWaterFat, psiMatrix, true, tempSignal, false );
 	  herk( AhA, psiMatrix, 'L', true );
-	  //	    AhA.copyLowerTriToUpper();
+
 	  for (int ka=0;ka<AhA.get_size(0);ka++ ) {
 	    for (int kb=ka+1;kb<AhA.get_size(1);kb++ ) {
 	      AhA(ka,kb) = conj(AhA(kb,ka));
@@ -644,20 +619,11 @@ namespace Gadgetron {
 	  
 	  hesv(AhA,curWaterFat);
 	  for ( int kn=0;kn<N;kn++ ) {
-	    for ( int ks=0;ks<nspecies;ks++ ) { // 2 elements for water and fat currently
+	    for ( int ks=0;ks<nspecies;ks++ ) { // DH: 2 elements for water and fat currently
 	      out(kx,ky,kz,0,kn,ks,0) = curWaterFat(ks,kn);
 	    }
 	  }
 	  
-	  //
-
-
-
-
-	  //	  out(kx,ky,kz,0,0,0,0) = fm;
-	  //	  out(kx,ky,kz,0,0,1,0) = r2star;
-
-
 	}
       }
     }    
@@ -665,10 +631,10 @@ namespace Gadgetron {
 
 
 
-    // Do voxel-wise fitting
-    // Start with Hui's toy example
-
-
+    // DH: Do voxel-wise fitting
+    // DH: Start with Hui's toy example
+    // DH: ToDo: No voxel-wise fitting yet - need to include
+    /*
     using namespace Gadgetron;
     using testing::Types;
 
@@ -720,7 +686,7 @@ namespace Gadgetron {
     std::cout << "Solver Results: W = " << b[0] << ", F = " << b[1] <<  ", fm = " << b[2] << std::endl;
 
 
-    std::cout << mytimer.format() << '\n';  
+    std::cout << mytimer.format() << '\n';  */
     
     //Clean up as needed
     
